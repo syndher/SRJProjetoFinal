@@ -2,31 +2,60 @@ using UnityEngine;
 
 public class Bullet : MonoBehaviour
 {
-    public float bulletSpeed = 20f;
+    public float speed = 10f;
+    public int damage = 25;
     public float lifetime = 3f;
-    public int damage = 10;
-    
-    private Rigidbody2D rb;
-    private Vector2 direction;
-    
+
+    private GameObject owner;
+    private bool hasHit = false;
+
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        
-        if (direction != Vector2.zero)
-        {
-            rb.linearVelocity = direction * bulletSpeed;
-        }
-        
         Destroy(gameObject, lifetime);
-    }
-    
-    public void SetDirection(Vector2 shootDirection)
-    {
-        direction = shootDirection;
-        if (rb != null)
+
+        Collider2D collider = GetComponent<Collider2D>();
+        if (collider == null)
         {
-            rb.linearVelocity = direction * bulletSpeed;
+            CircleCollider2D circleCollider = gameObject.AddComponent<CircleCollider2D>();
+            circleCollider.isTrigger = true;
+        }
+        else
+        {
+            collider.isTrigger = true;
+        }
+
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb == null)
+            rb = gameObject.AddComponent<Rigidbody2D>();
+        
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.gravityScale = 0;
+        rb.freezeRotation = true;
+    }
+
+    void Update()
+    {
+        transform.Translate(Vector3.up * speed * Time.deltaTime);
+    }
+
+    public void SetOwner(GameObject ownerObject)
+    {
+        owner = ownerObject;
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (hasHit) return;
+
+        PlayerController player = other.GetComponent<PlayerController>();
+        if (player != null)
+        {
+            if (owner != null && other.gameObject == owner)
+                return;
+
+            hasHit = true;
+            player.TakeDamage(damage);
+            Destroy(gameObject);
         }
     }
 }
