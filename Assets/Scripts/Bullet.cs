@@ -8,34 +8,46 @@ public class Bullet : MonoBehaviour
 
     private GameObject owner;
     private bool hasHit = false;
+    private Rigidbody2D rb;
+    private Vector2 lastPosition;
+    private float spawnTime;
 
     void Start()
     {
-        Destroy(gameObject, lifetime);
-
-        Collider2D collider = GetComponent<Collider2D>();
-        if (collider == null)
-        {
-            CircleCollider2D circleCollider = gameObject.AddComponent<CircleCollider2D>();
-            circleCollider.isTrigger = true;
-        }
-        else
-        {
-            collider.isTrigger = true;
-        }
-
-        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        rb = GetComponent<Rigidbody2D>();
         if (rb == null)
             rb = gameObject.AddComponent<Rigidbody2D>();
-        
+
         rb.bodyType = RigidbodyType2D.Kinematic;
         rb.gravityScale = 0;
         rb.freezeRotation = true;
+        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+
+        rb.linearVelocity = transform.up * speed;
+
+        Collider2D existing = GetComponent<Collider2D>();
+        if (existing != null) Destroy(existing);
+        CircleCollider2D circle = gameObject.AddComponent<CircleCollider2D>();
+        circle.isTrigger = true;
+        circle.radius = 0.2f;
+
+        Destroy(gameObject, lifetime);
+        lastPosition = rb.position;
+        spawnTime = Time.time;
+    }
+
+    void FixedUpdate()
+    {
+        lastPosition = rb.position;
     }
 
     void Update()
     {
-        transform.Translate(Vector3.up * speed * Time.deltaTime);
+        if (rb.linearVelocity.sqrMagnitude > 0.01f)
+        {
+            float angle = Mathf.Atan2(rb.linearVelocity.y, rb.linearVelocity.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+        }
     }
 
     public void SetOwner(GameObject ownerObject)
@@ -46,16 +58,42 @@ public class Bullet : MonoBehaviour
     void OnTriggerEnter2D(Collider2D other)
     {
         if (hasHit) return;
-
-        PlayerController player = other.GetComponent<PlayerController>();
-        if (player != null)
+        if (other.GetComponent<PlayerController>() != null)
         {
             if (owner != null && other.gameObject == owner)
+            {
+                if (Time.time - spawnTime < 0.2f)
+                    return;
+                hasHit = true;
+                Destroy(gameObject);
                 return;
+            }
 
             hasHit = true;
-            player.TakeDamage(damage);
             Destroy(gameObject);
+            return;
         }
+        if (other.GetComponent<Bullet>() != null)
+        {
+            hasHit = true;
+            Destroy(gameObject);
+            return;
+        }
+        if (other.GetComponent<Walls>() != null)
+        {
+            hasHit = true;
+            BounceOffWall(other);
+        }
+    }
+
+    private void BounceOffWall(Collider2D wallCollider)
+    {
+        Vector2 closestPoint = wallCollider.ClosestPoint(rb.position);
+        Vector2 normal = (rb.position - closestPoint).normalized;
+        float pushDistance = 0.1f;
+        rb.position = closestPoint + normal * pushDistance;
+        Vector2 reflected = Vector2.Reflect(rb.linearVelocity, normal);
+        rb.linearVelocity = reflected.normalized * speed;
+        lastPosition = rb.position;
     }
 }
