@@ -21,7 +21,6 @@ public class Bullet : MonoBehaviour
         rb.bodyType = RigidbodyType2D.Kinematic;
         rb.gravityScale = 0;
         rb.freezeRotation = true;
-        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
         rb.linearVelocity = transform.up * speed;
 

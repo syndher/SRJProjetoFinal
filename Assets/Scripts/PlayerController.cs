@@ -1,7 +1,8 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : NetworkBehaviour
 {
     [Header("Movement")]
     public float moveSpeed = 5f;
@@ -115,8 +116,8 @@ public class PlayerController : MonoBehaviour
             Bullet bullet = other.GetComponent<Bullet>();
             if (bullet != null)
             {
-                TakeDamage(20); // Example damage value
-                Destroy(other.gameObject); // Destroy the bullet on hit
+                TakeDamage(20);
+                Destroy(other.gameObject);
             }
         }
     }
