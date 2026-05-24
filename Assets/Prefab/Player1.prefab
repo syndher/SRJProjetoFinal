@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8910538838207705707}
   - component: {fileID: 2196888279007205028}
-  - component: {fileID: 4575345677521456115}
+  - component: {fileID: -8856268433350891303}
   - component: {fileID: 4384686033143113068}
   - component: {fileID: 3916159326971212002}
   - component: {fileID: 5090303113309784432}
@@ -98,7 +98,7 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
---- !u!114 &4575345677521456115
+--- !u!114 &-8856268433350891303
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -110,7 +110,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1148877473
+  GlobalObjectIdHash: 118696778
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -188,6 +188,8 @@ MonoBehaviour:
   maxHealth: 100
   bulletPrefab: {fileID: 8581529278563067995, guid: bf0b229b0220ea7459285ee930d2f027, type: 3}
   shootPoint: {fileID: 4909285515873788557}
+  muzzleFlashPrefab: {fileID: 0}
+  shootSound: {fileID: 0}
 --- !u!50 &5090303113309784432
 Rigidbody2D:
   serializedVersion: 5

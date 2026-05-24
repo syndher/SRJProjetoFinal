@@ -67,11 +67,21 @@ public class NetworkSetup : MonoBehaviour
         networkManager = GetComponent<NetworkManager>();
         if (transport == null) Debug.LogError("No UnityTransport found!");
         if (networkManager == null) Debug.LogError("No NetworkManager found!");
+
+        if (playerPrefabs != null)
+        {
+            foreach (var prefab in playerPrefabs)
+            {
+                if (prefab != null && prefab.GetComponent<NetworkObject>() != null)
+                {
+                    networkManager.NetworkConfig.Prefabs.Add(new NetworkPrefab { Prefab = prefab.gameObject });
+                }
+            }
+        }
     }
 
     void Start()
     {
-        // Parse command line arguments
         string[] args = System.Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length; i++)
         {
@@ -174,7 +184,6 @@ public class NetworkSetup : MonoBehaviour
             }
             else
             {
-                // No scene change – spawn host immediately
                 SpawnHostPlayer();
             }
             return relayData.JoinCode;
@@ -361,8 +370,6 @@ public class NetworkSetup : MonoBehaviour
         }
     }
 
-    // ======================== Player Spawning ========================
-
     private void SpawnPlayerForClient(ulong clientId)
     {
         if (spawnedClients.Contains(clientId))
@@ -381,25 +388,30 @@ public class NetworkSetup : MonoBehaviour
             return;
         }
 
-        // Find a free spawn location
-        Vector3 spawnPos = Vector3.zero;
+        Vector3 spawnPos = playerSpawnLocations[0].position;
         var currentPlayers = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
         foreach (var spawnLoc in playerSpawnLocations)
         {
-            float closestDist = float.MaxValue;
+            bool occupied = false;
             foreach (var player in currentPlayers)
             {
-                float d = Vector3.Distance(player.transform.position, spawnLoc.position);
-                closestDist = Mathf.Min(closestDist, d);
+                if (Vector3.Distance(player.transform.position, spawnLoc.position) < 2f)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (!occupied)
+            {
                 spawnPos = spawnLoc.position;
+                break;
             }
         }
 
         var playerPrefab = playerPrefabs[playerPrefabIndex % playerPrefabs.Count];
         var playerObj = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
         var netObj = playerObj.GetComponent<NetworkObject>();
-        netObj.SpawnAsPlayerObject(clientId, true);   // ownership set here
-        // Do NOT call ChangeOwnership again
+        netObj.SpawnAsPlayerObject(clientId, true);
 
         Debug.Log($"Spawned player for client {clientId}, prefab index {playerPrefabIndex}");
         playerPrefabIndex++;
@@ -416,7 +428,6 @@ public class NetworkSetup : MonoBehaviour
     {
         if (!networkManager.IsServer) return;
 
-        // If the game scene hasn't loaded yet, queue the spawn
         if (pendingGameSceneName != null && SceneManager.GetActiveScene().name != pendingGameSceneName)
         {
             pendingClientSpawns.Enqueue(clientId);
@@ -440,7 +451,6 @@ public class NetworkSetup : MonoBehaviour
             Debug.Log($"Game scene '{scene.name}' loaded – spawning host player");
             SpawnHostPlayer();
 
-            // Spawn any clients that connected while scene was loading
             while (pendingClientSpawns.Count > 0)
             {
                 ulong clientId = pendingClientSpawns.Dequeue();
@@ -451,8 +461,6 @@ public class NetworkSetup : MonoBehaviour
             pendingGameSceneName = null;
         }
     }
-
-    // ======================== Existing Methods (unchanged) ========================
 
     IEnumerator StartAsClientCR()
     {
@@ -545,7 +553,6 @@ public class NetworkSetup : MonoBehaviour
         return relayData?.JoinCode;
     }
 
-    // ======================== Windows Window Title & Editor Tools (unchanged) ========================
 #if UNITY_STANDALONE_WIN
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetWindowText(IntPtr hWnd, string lpString);
