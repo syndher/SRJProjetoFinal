@@ -4,15 +4,15 @@
 
 ### Introdução
 
-O projeto consiste num simples jogo dos tanques onde dois jogadores vão um contra o outro.
+O projeto consiste num simples jogo dos tanques onde dois jogadores vão um contra o outro, as balas podem acertar no seu próprio tanque e estas rebatem pelas paredes do cenário.
 
 ### Técnicas
 
-Foi utilizado o "Unity Netcode for GameObjects" para implementar o jogo de ação, cliente/servidor com login/matchmaking.
+Foi utilizado o "Unity Netcode for GameObjects" para implementar o jogo de ação, cliente/servidor sem qualquer tipo de login/matchmaking.
 
 ### Estado/Uso
 
-O projeto encontra-se incompleto, com código de networking funcional mas com alguns problemas de login/matchmaking tal como alguns bugs no próprio gameplay.
+O projeto encontra-se incompleto, com código de networking funcional mas com alguns problemas de timeout tal como alguns bugs no próprio gameplay.
 
 Devido ao estado do projeto, é necessário correr pelo editor utilizando o play mode.
 
@@ -23,7 +23,7 @@ Controlos:
 
 ### Bibliografia
 
-A pesquisa para a construção deste projeto focou-se maioritariamente nos videos do professor da disciplina tal como a utilização do código de networking providenciado pelo mesmo.
+A pesquisa para a construção deste projeto focou-se maioritariamente nos videos do professor da disciplina tal como a utilização do código de networking providenciado pelo mesmo, modificado para obter a funcionabilidade atual.
 
 Unity Documentation : https://docs.unity3d.com/560/Documentation/ScriptReference/Network.html
 

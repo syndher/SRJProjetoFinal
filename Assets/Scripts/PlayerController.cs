@@ -16,6 +16,10 @@ public class PlayerController : NetworkBehaviour
     public GameObject bulletPrefab;
     public Transform shootPoint;
 
+    // Optional visual/audio feedback
+    public GameObject muzzleFlashPrefab;
+    public AudioClip shootSound;
+
     private Rigidbody2D rb;
     private float moveInput;
     private float turnInput;
@@ -26,15 +30,12 @@ public class PlayerController : NetworkBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         if (rb == null)
-        {
             rb = gameObject.AddComponent<Rigidbody2D>();
-            rb.gravityScale = 0;
-            rb.freezeRotation = true;
-        }
+        rb.gravityScale = 0;
+        rb.freezeRotation = true;
 
         currentHealth = maxHealth;
 
-        // Force a non‑trigger collider on the player
         Collider2D col = GetComponent<Collider2D>();
         if (col == null)
             col = gameObject.AddComponent<BoxCollider2D>();
@@ -42,48 +43,49 @@ public class PlayerController : NetworkBehaviour
 
         if (shootPoint == null)
             shootPoint = transform;
-        else
-            shootPoint.localRotation = Quaternion.identity;
+
+        // Only the owning client should control this tank
+        if (!IsOwner)
+        {
+            // Disable any local camera or audio listener on non‑owner instances
+            Camera cam = GetComponentInChildren<Camera>();
+            if (cam) cam.gameObject.SetActive(false);
+        }
     }
 
     void Update()
     {
+        if (!IsOwner) return;
+
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // Movement: W / S
-        if (keyboard.wKey.isPressed)
-            moveInput = 1;
-        else if (keyboard.sKey.isPressed)
-            moveInput = -1;
-        else
-            moveInput = 0;
+        // Movement input
+        moveInput = keyboard.wKey.isPressed ? 1 : (keyboard.sKey.isPressed ? -1 : 0);
+        turnInput = keyboard.aKey.isPressed ? 1 : (keyboard.dKey.isPressed ? -1 : 0);
 
-        // Turning: A / D
-        if (keyboard.aKey.isPressed)
-            turnInput = 1;
-        else if (keyboard.dKey.isPressed)
-            turnInput = -1;
-        else
-            turnInput = 0;
-
-        // Shooting: Space
+        // Shooting – local feedback + server request
         if (keyboard.spaceKey.wasPressedThisFrame && Time.time >= nextShootTime)
         {
-            Shoot();
-            nextShootTime = Time.time + shootCooldown;
-        }
+            // Local visual/audio (only seen/heard by this client)
+            if (muzzleFlashPrefab != null)
+            {
+                GameObject flash = Instantiate(muzzleFlashPrefab, shootPoint.position, shootPoint.rotation);
+                Destroy(flash, 0.1f);
+            }
+            if (shootSound != null)
+                AudioSource.PlayClipAtPoint(shootSound, shootPoint.position);
 
-        // Stop movement if no input
-        if (turnInput == 0 && moveInput == 0)
-        {
-            rb.linearVelocity = Vector2.zero;
-            rb.angularVelocity = 0f;
+            // Ask the server to spawn the bullet
+            ShootServerRpc(shootPoint.position, shootPoint.rotation);
+            nextShootTime = Time.time + shootCooldown;
         }
     }
 
     void FixedUpdate()
     {
+        if (!IsOwner) return;
+
         float turn = turnInput * turnSpeed * Time.fixedDeltaTime;
         rb.MoveRotation(rb.rotation + turn);
 
@@ -92,47 +94,59 @@ public class PlayerController : NetworkBehaviour
             Vector2 movement = transform.up * moveInput * moveSpeed * Time.fixedDeltaTime;
             rb.MovePosition(rb.position + movement);
         }
-    }
-
-    void Shoot()
-    {
-        if (bulletPrefab == null)
+        else
         {
-            Debug.LogError("Bullet prefab not assigned!");
-            return;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
         }
-
-        Vector3 spawnPos = shootPoint.position;
-        GameObject newBullet = Instantiate(bulletPrefab, spawnPos, transform.rotation);
-        Bullet bulletScript = newBullet.GetComponent<Bullet>();
-        if (bulletScript != null)
-            bulletScript.SetOwner(gameObject);
     }
-    private void OnTriggerEnter(Collider other)
+
+    [ServerRpc]
+    void ShootServerRpc(Vector3 position, Quaternion rotation)
     {
-        Debug.Log($"Player collided with {other.gameObject.name}");
-        if (other.GetComponent<Bullet>() != null)
+        if (bulletPrefab == null) return;
+
+        GameObject bullet = Instantiate(bulletPrefab, position, rotation);
+        NetworkObject netObj = bullet.GetComponent<NetworkObject>();
+        if (netObj != null)
         {
-            Bullet bullet = other.GetComponent<Bullet>();
-            if (bullet != null)
-            {
-                TakeDamage(20);
-                Destroy(other.gameObject);
-            }
+            netObj.Spawn();
+            Bullet bulletScript = bullet.GetComponent<Bullet>();
+            if (bulletScript != null)
+                bulletScript.SetOwner(gameObject);
+        }
+        else
+        {
+            Debug.LogError("Bullet prefab missing NetworkObject!");
+            Destroy(bullet);
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!IsServer) return;
+
+        Bullet bullet = other.GetComponent<Bullet>();
+        if (bullet != null)
+        {
+            TakeDamage(bullet.damage);
+            bullet.GetComponent<NetworkObject>().Despawn();
         }
     }
 
     public void TakeDamage(int damage)
     {
+        if (!IsServer) return;
         currentHealth -= damage;
-        Debug.Log($"Player took {damage} damage! Health: {currentHealth}");
-
+        Debug.Log($"Player took {damage} damage. Health: {currentHealth}");
         if (currentHealth <= 0)
             Die();
     }
+
     void Die()
     {
-        Debug.Log("Player died!");
+        if (!IsServer) return;
+        GetComponent<NetworkObject>().Despawn();
         Destroy(gameObject);
     }
 }
