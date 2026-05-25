@@ -3,60 +3,52 @@ using Unity.Netcode;
 
 public class Bullet : NetworkBehaviour
 {
-    public float speed = 10f;
-    public int damage = 25;
-    public float lifetime = 3f;
-    public float gracePeriod = 0.2f;   // seconds before hitting its owner
-
-    public GameObject Owner { get; private set; }
-
+    private float _speed = 10f;
+    private int _damage = 20;
+    public int Damage => _damage;
+    [SerializeField] private PhysicsMaterial2D _bouncyMaterial;
+    private float _lifetime = 3f;
+    private int _maxBounces = 2;
+    private int _bounceCount = 0;
     private Rigidbody2D rb;
-    private float spawnTime;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        if (rb == null)
-            rb = gameObject.AddComponent<Rigidbody2D>();
-        rb.bodyType = RigidbodyType2D.Kinematic;
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Dynamic;   // needed for physics bounce
         rb.gravityScale = 0;
         rb.freezeRotation = true;
-        rb.linearVelocity = transform.up * speed;
+        rb.linearVelocity = transform.up * _speed;
 
         CircleCollider2D circle = GetComponent<CircleCollider2D>();
-        if (circle == null)
-        {
-            circle = gameObject.AddComponent<CircleCollider2D>();
-            circle.isTrigger = true;
-            circle.radius = 0.2f;
-        }
+        if (circle == null) circle = gameObject.AddComponent<CircleCollider2D>();
+        circle.isTrigger = false;
+        circle.radius = 0.2f;
+        circle.sharedMaterial = _bouncyMaterial; // assign here too
 
-        spawnTime = Time.time;
-        Destroy(gameObject, lifetime);
+        Destroy(gameObject, _lifetime);
     }
 
-    public void SetOwner(GameObject owner)
-    {
-        Owner = owner;
-    }
-
-    private void OnTriggerEnter2D(Collider2D other)
+    private void OnCollisionEnter2D(Collision2D collision)
     {
         if (!IsServer) return;
 
-        // Grace period: avoid hitting the owner immediately after spawn
-        if (Owner != null && other.gameObject == Owner && Time.time - spawnTime < gracePeriod)
-            return;
-
-        PlayerController player = other.GetComponent<PlayerController>();
+        // Hit player
+        PlayerController player = collision.gameObject.GetComponent<PlayerController>();
         if (player != null)
         {
-            // Damage will be applied by the player's OnTriggerEnter2D
-            // The bullet will be despawned there.
+            player.TakeDamage(_damage);
+            GetComponent<NetworkObject>().Despawn();
             return;
         }
 
-        // Hit something else (wall, etc.) – destroy bullet
-        GetComponent<NetworkObject>().Despawn();
+        // Hit wall
+        if (collision.gameObject.GetComponent<Walls>() != null)
+        {
+            _bounceCount++;
+            if (_bounceCount >= _maxBounces)
+                GetComponent<NetworkObject>().Despawn();
+        }
     }
 }

@@ -27,6 +27,12 @@ using System.Diagnostics;
 
 using Debug = UnityEngine.Debug;
 
+// NEW: Simple static class to control global game state
+public static class GameState
+{
+    public static bool IsGameRunning = false;
+}
+
 public class NetworkSetup : MonoBehaviour
 {
     [SerializeField] private List<Transform>        playerSpawnLocations;
@@ -35,7 +41,14 @@ public class NetworkSetup : MonoBehaviour
     [SerializeField] private int                    maxPlayers = 2;
     [SerializeField] private string                 joinCode = "";
     [SerializeField] private bool                   enableAnalytics;
+    
+    // NEW: Optional UI text to show "Waiting for other player..."
+    [SerializeField] private TextMeshProUGUI        waitingText;
+    
     private HashSet<ulong> spawnedClients = new HashSet<ulong>();
+    
+    // NEW: Flag to prevent starting the game twice
+    private bool gameStarted = false;
 
     public class RelayHostData
     {
@@ -416,6 +429,26 @@ public class NetworkSetup : MonoBehaviour
         Debug.Log($"Spawned player for client {clientId}, prefab index {playerPrefabIndex}");
         playerPrefabIndex++;
         spawnedClients.Add(clientId);
+
+        // NEW: Check if the required number of players have connected
+        if (!gameStarted && networkManager.ConnectedClients.Count == maxPlayers)
+        {
+            StartGame();
+        }
+    }
+
+    // NEW: Method called when all players are ready
+    private void StartGame()
+    {
+        if (gameStarted) return;
+        gameStarted = true;
+        GameState.IsGameRunning = true;
+
+        // Hide waiting text if assigned
+        if (waitingText != null)
+            waitingText.gameObject.SetActive(false);
+
+        Debug.Log("Game started – both players are on the field!");
     }
 
     private void SpawnHostPlayer()

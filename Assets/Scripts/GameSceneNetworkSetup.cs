@@ -7,7 +7,7 @@ public class GameSceneNetworkSetup : MonoBehaviour
     [SerializeField] private List<Transform> playerSpawnLocations;
     [SerializeField] private List<PlayerController> playerPrefabs;
 
-    void Awake()   // Changed from Start to Awake
+    void Awake()
     {
         var networkSetup = FindFirstObjectByType<NetworkSetup>();
         if (networkSetup != null)

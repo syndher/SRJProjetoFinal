@@ -56,6 +56,7 @@ public class PlayerController : NetworkBehaviour
     void Update()
     {
         if (!IsOwner) return;
+        if (!GameState.IsGameRunning) return;
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
@@ -112,8 +113,6 @@ public class PlayerController : NetworkBehaviour
         {
             netObj.Spawn();
             Bullet bulletScript = bullet.GetComponent<Bullet>();
-            if (bulletScript != null)
-                bulletScript.SetOwner(gameObject);
         }
         else
         {
@@ -129,7 +128,7 @@ public class PlayerController : NetworkBehaviour
         Bullet bullet = other.GetComponent<Bullet>();
         if (bullet != null)
         {
-            TakeDamage(bullet.damage);
+            TakeDamage(bullet.Damage);
             bullet.GetComponent<NetworkObject>().Despawn();
         }
     }
