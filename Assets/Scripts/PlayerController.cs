@@ -5,26 +5,23 @@ using UnityEngine.InputSystem;
 public class PlayerController : NetworkBehaviour
 {
     [Header("Movement")]
-    public float moveSpeed = 5f;
-    public float turnSpeed = 100f;
+    private float moveSpeed = 5f;
+    private float turnSpeed = 100f;
 
     [Header("Combat")]
-    public float shootCooldown = 0.5f;
-    public int maxHealth = 100;
+    private float shootCooldown = 0.5f;
+    private int maxHealth = 100;
 
     [Header("Shooting")]
-    public GameObject bulletPrefab;
-    public Transform shootPoint;
-
-    // Optional visual/audio feedback
-    public GameObject muzzleFlashPrefab;
-    public AudioClip shootSound;
+    private GameObject bulletPrefab;
+    private Transform shootPoint;
 
     private Rigidbody2D rb;
     private float moveInput;
     private float turnInput;
     private float nextShootTime;
     private int currentHealth;
+    public int CurrentHealth => currentHealth;
 
     void Start()
     {
@@ -44,10 +41,8 @@ public class PlayerController : NetworkBehaviour
         if (shootPoint == null)
             shootPoint = transform;
 
-        // Only the owning client should control this tank
         if (!IsOwner)
         {
-            // Disable any local camera or audio listener on non‑owner instances
             Camera cam = GetComponentInChildren<Camera>();
             if (cam) cam.gameObject.SetActive(false);
         }
@@ -64,19 +59,10 @@ public class PlayerController : NetworkBehaviour
         moveInput = keyboard.wKey.isPressed ? 1 : (keyboard.sKey.isPressed ? -1 : 0);
         turnInput = keyboard.aKey.isPressed ? 1 : (keyboard.dKey.isPressed ? -1 : 0);
 
-        // Shooting – local feedback + server request
+        // Shooting
         if (keyboard.spaceKey.wasPressedThisFrame && Time.time >= nextShootTime)
         {
-            // Local visual/audio (only seen/heard by this client)
-            if (muzzleFlashPrefab != null)
-            {
-                GameObject flash = Instantiate(muzzleFlashPrefab, shootPoint.position, shootPoint.rotation);
-                Destroy(flash, 0.1f);
-            }
-            if (shootSound != null)
-                AudioSource.PlayClipAtPoint(shootSound, shootPoint.position);
-
-            // Ask the server to spawn the bullet
+            // Server instantiates bullet
             ShootServerRpc(shootPoint.position, shootPoint.rotation);
             nextShootTime = Time.time + shootCooldown;
         }
@@ -111,7 +97,6 @@ public class PlayerController : NetworkBehaviour
         if (netObj != null)
         {
             netObj.Spawn();
-            Bullet bulletScript = bullet.GetComponent<Bullet>();
         }
         else
         {

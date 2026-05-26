@@ -19,8 +19,6 @@ using Unity.Services.Authentication;
 using System.Threading.Tasks;
 using Unity.Services.Relay.Models;
 using UnityEngine.UnityConsent;
-using Unity.Collections;
-
 
 #if UNITY_STANDALONE_WIN
 using System.Runtime.InteropServices;
@@ -28,12 +26,6 @@ using System.Diagnostics;
 #endif
 
 using Debug = UnityEngine.Debug;
-
-// Global game state
-public static class GameState
-{
-    public static bool IsGameRunning = false;
-}
 
 public class NetworkSetup : MonoBehaviour
 {
@@ -43,10 +35,9 @@ public class NetworkSetup : MonoBehaviour
     [SerializeField] private int                    maxPlayers = 2;
     [SerializeField] private string                 joinCode = "";
     [SerializeField] private bool                   enableAnalytics;
-    [SerializeField] private TextMeshProUGUI        waitingText;   // optional, will be hidden when game starts
 
     private HashSet<ulong> spawnedClients = new HashSet<ulong>();
-    private bool gameStarted = false;
+    private int playerPrefabIndex = 0;
 
     public class RelayHostData
     {
@@ -62,7 +53,6 @@ public class NetworkSetup : MonoBehaviour
     private RelayHostData relayData;
 
     private bool isServer = false;
-    private int playerPrefabIndex = 0;
     private UnityTransport transport;
     private NetworkManager networkManager;
     private bool isRelay = false;
@@ -93,45 +83,25 @@ public class NetworkSetup : MonoBehaviour
 
     void Start()
     {
-        RegisterCustomMessages();
-
         string[] args = System.Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--server")
-            {
                 isServer = true;
-            }
             else if (args[i] == "--code")
-            {
-                joinCode = ((i + 1) < args.Length) ? (args[i + 1]) : ("");
-            }
+                joinCode = ((i + 1) < args.Length) ? args[i + 1] : "";
         }
 
         transport = GetComponent<UnityTransport>();
         if (transport != null && transport.Protocol == UnityTransport.ProtocolType.RelayUnityTransport)
-        {
             isRelay = true;
-        }
 
         if (isServer)
             StartCoroutine(StartAsServerCR());
         else if (!string.IsNullOrEmpty(joinCode))
             StartCoroutine(StartAsClientCR());
-        else
-            Debug.LogError("No valid launch arguments. Use --server or --code <joinCode>");
-    }
-
-    private void RegisterCustomMessages()
-    {
-        networkManager.CustomMessagingManager.RegisterNamedMessageHandler("GameStarted",
-            (senderClientId, reader) =>
-            {
-                GameState.IsGameRunning = true;
-                if (waitingText != null)
-                    waitingText.gameObject.SetActive(false);
-                Debug.Log("Game started (client received message)");
-            });
+        //else
+            //Debug.LogError("No valid launch arguments. Use --server or --code <joinCode>");
     }
 
     public void SetPlayerSpawnData(List<Transform> locations, List<PlayerController> prefabs, TextMeshProUGUI codeDisplayText = null)
@@ -187,7 +157,8 @@ public class NetworkSetup : MonoBehaviour
             textJoinCode.gameObject.SetActive(true);
         }
 
-        transport.SetRelayServerData(relayData.IPv4Address, relayData.Port, relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData);
+        transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
+            relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData);
 
         InitAnalytics();
 
@@ -208,10 +179,6 @@ public class NetworkSetup : MonoBehaviour
                 pendingGameSceneName = gameSceneName;
                 SceneManager.sceneLoaded += OnGameSceneLoaded;
                 networkManager.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
-            }
-            else
-            {
-                // No host player spawned for dedicated server
             }
             return relayData.JoinCode;
         }
@@ -248,8 +215,8 @@ public class NetworkSetup : MonoBehaviour
         relayData.HostConnectionData = allocation.HostConnectionData;
         relayData.Key = allocation.Key;
         transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
-                                        relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData,
-                                        relayData.HostConnectionData);
+            relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData,
+            relayData.HostConnectionData);
 
         InitAnalytics();
 
@@ -271,12 +238,9 @@ public class NetworkSetup : MonoBehaviour
 
     IEnumerator StartAsServerCR()
     {
-        var networkManager = GetComponent<NetworkManager>();
         networkManager.enabled = true;
-        var transport = GetComponent<UnityTransport>();
         transport.enabled = true;
         SetWindowTitle("Starting as server...");
-
         yield return null;
 
         if (isRelay)
@@ -330,8 +294,8 @@ public class NetworkSetup : MonoBehaviour
                         textJoinCode.text = $"JoinCode:{relayData.JoinCode}";
                         textJoinCode.gameObject.SetActive(true);
                     }
-
-                    transport.SetRelayServerData(relayData.IPv4Address, relayData.Port, relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData);
+                    transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
+                        relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData);
                 }
             }
         }
@@ -344,10 +308,6 @@ public class NetworkSetup : MonoBehaviour
             Debug.Log($"Serving on port {transport.ConnectionData.Port}");
             networkManager.OnClientConnectedCallback += OnClientConnected;
             networkManager.OnClientDisconnectCallback += OnClientDisconnected;
-
-            // Start a 20-second timer to begin the game
-            StartCoroutine(StartGameAfterDelay(20f));
-            Debug.Log("Server started – game will start in 20 seconds.");
         }
         else
         {
@@ -362,9 +322,7 @@ public class NetworkSetup : MonoBehaviour
         {
             await UnityServices.InitializeAsync();
             if (!AuthenticationService.Instance.IsSignedIn)
-            {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
-            }
         }
         catch (Exception e)
         {
@@ -377,8 +335,7 @@ public class NetworkSetup : MonoBehaviour
     {
         try
         {
-            Allocation allocation = await Unity.Services.Relay.RelayService.Instance.CreateAllocationAsync(maxPlayers);
-            return allocation;
+            return await Unity.Services.Relay.RelayService.Instance.CreateAllocationAsync(maxPlayers);
         }
         catch (Exception e)
         {
@@ -391,8 +348,7 @@ public class NetworkSetup : MonoBehaviour
     {
         try
         {
-            string code = await Unity.Services.Relay.RelayService.Instance.GetJoinCodeAsync(allocationID);
-            return code;
+            return await Unity.Services.Relay.RelayService.Instance.GetJoinCodeAsync(allocationID);
         }
         catch (Exception e)
         {
@@ -449,36 +405,6 @@ public class NetworkSetup : MonoBehaviour
         spawnedClients.Add(clientId);
     }
 
-    private void StartGame()
-    {
-        if (gameStarted) return;
-        gameStarted = true;
-        GameState.IsGameRunning = true;
-
-        if (networkManager.IsServer)
-        {
-            using var writer = new FastBufferWriter(0, Allocator.Temp);
-            networkManager.CustomMessagingManager.SendNamedMessageToAll("GameStarted", writer);
-            Debug.Log("Game start message sent to all clients.");
-        }
-
-        if (waitingText != null)
-            waitingText.gameObject.SetActive(false);
-
-        Debug.Log("Game started after 20 seconds!");
-    }
-
-    private IEnumerator StartGameAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        if (!gameStarted)
-        {
-            StartGame();
-        }
-    }
-
-    private void SpawnHostPlayer() { } // dedicated server
-
     private void OnClientConnected(ulong clientId)
     {
         if (!networkManager.IsServer) return;
@@ -516,9 +442,7 @@ public class NetworkSetup : MonoBehaviour
 
     IEnumerator StartAsClientCR()
     {
-        var networkManager = GetComponent<NetworkManager>();
         networkManager.enabled = true;
-        var transport = GetComponent<UnityTransport>();
         transport.enabled = true;
         SetWindowTitle("Starting as client...");
         yield return null;
@@ -557,8 +481,8 @@ public class NetworkSetup : MonoBehaviour
                 relayData.HostConnectionData = allocation.HostConnectionData;
                 relayData.Key = allocation.Key;
                 transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
-                                                relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData,
-                                                relayData.HostConnectionData);
+                    relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData,
+                    relayData.HostConnectionData);
             }
         }
 
@@ -567,12 +491,12 @@ public class NetworkSetup : MonoBehaviour
         if (networkManager.StartClient())
         {
             SetWindowTitle("MPTanks - Client...");
-            UnityEngine.Debug.Log($"Connecting on port {transport.ConnectionData.Port}");
+            Debug.Log($"Connecting on port {transport.ConnectionData.Port}");
         }
         else
         {
             SetWindowTitle("Fail to start as client");
-            UnityEngine.Debug.LogError($"Failed to connect on port {transport.ConnectionData.Port}");
+            Debug.LogError($"Failed to connect on port {transport.ConnectionData.Port}");
         }
     }
 
@@ -590,8 +514,7 @@ public class NetworkSetup : MonoBehaviour
     {
         try
         {
-            var allocation = await Unity.Services.Relay.RelayService.Instance.JoinAllocationAsync(joinCode);
-            return allocation;
+            return await Unity.Services.Relay.RelayService.Instance.JoinAllocationAsync(joinCode);
         }
         catch (Exception e)
         {
@@ -600,11 +523,11 @@ public class NetworkSetup : MonoBehaviour
         }
     }
 
-    public string GetJoinCode()
-    {
-        return relayData?.JoinCode;
-    }
+    public string GetJoinCode() => relayData?.JoinCode;
 
+    // ------------------------------------------------------------------
+    // Windows window title
+    // ------------------------------------------------------------------
 #if UNITY_STANDALONE_WIN
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetWindowText(IntPtr hWnd, string lpString);
@@ -634,39 +557,38 @@ public class NetworkSetup : MonoBehaviour
 #if !UNITY_EDITOR
         uint processId = (uint)Process.GetCurrentProcess().Id;
         IntPtr hWnd = FindWindowByProcessId(processId);
-        if (hWnd != IntPtr.Zero)
-        {
-            SetWindowText(hWnd, title);
-        }
+        if (hWnd != IntPtr.Zero) SetWindowText(hWnd, title);
 #endif
     }
 #else
     static void SetWindowTitle(string title) { }
 #endif
 
+    // ------------------------------------------------------------------
+    // Editor build & launch tools
+    // ------------------------------------------------------------------
 #if UNITY_EDITOR
     [MenuItem("Tools/Build Windows (x64)", priority = 0)]
     public static bool BuildGame()
     {
-        BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
-        buildPlayerOptions.scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
-        buildPlayerOptions.locationPathName = Path.Combine("Builds", "MPTanks.exe");
-        buildPlayerOptions.target = BuildTarget.StandaloneWindows64;
-        buildPlayerOptions.options = BuildOptions.None;
-        var report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+        BuildPlayerOptions options = new BuildPlayerOptions();
+        options.scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+        options.locationPathName = Path.Combine("Builds", "MPTanks.exe");
+        options.target = BuildTarget.StandaloneWindows64;
+        options.options = BuildOptions.None;
+        var report = BuildPipeline.BuildPlayer(options);
         Debug.Log($"Build ended with status: {report.summary.result}");
         return report.summary.result == BuildResult.Succeeded;
     }
 
     private static void Run(string path, string args)
     {
-        Process process = new Process();
-        process.StartInfo.FileName = path;
-        process.StartInfo.Arguments = args;
-        process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-        process.StartInfo.RedirectStandardOutput = false;
-        process.StartInfo.UseShellExecute = true;
-        process.Start();
+        Process proc = new Process();
+        proc.StartInfo.FileName = path;
+        proc.StartInfo.Arguments = args;
+        proc.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+        proc.StartInfo.UseShellExecute = true;
+        proc.Start();
     }
 
     [MenuItem("Tools/Launch (Server)", priority = 30)]
@@ -688,17 +610,10 @@ public class NetworkSetup : MonoBehaviour
     [MenuItem("Tools/Close All", priority = 100)]
     public static void CloseAll()
     {
-        foreach (var process in Process.GetProcessesByName("MPTanks"))
+        foreach (var p in Process.GetProcessesByName("MPTanks"))
         {
-            try
-            {
-                process.Kill();
-                process.WaitForExit();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"Error killing process: {ex.Message}");
-            }
+            try { p.Kill(); p.WaitForExit(); }
+            catch (Exception ex) { Debug.LogWarning($"Error killing process: {ex.Message}"); }
         }
     }
 #endif

@@ -14,7 +14,6 @@ public class UIMainMenu : MonoBehaviour
 
     private async void Start()
     {
-        // Disable buttons until services are ready
         hostButton.interactable = false;
         joinButton.interactable = false;
 

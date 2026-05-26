@@ -4,8 +4,7 @@ using Unity.Netcode;
 
 public class InGameUI : MonoBehaviour
 {
-    public TextMeshProUGUI codeText;  // Drag your UI Text here in Inspector
-
+    public TextMeshProUGUI codeText;
     void Start()
     {
         var networkSetup = FindFirstObjectByType<NetworkSetup>();
