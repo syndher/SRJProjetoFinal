@@ -19,6 +19,8 @@ using Unity.Services.Authentication;
 using System.Threading.Tasks;
 using Unity.Services.Relay.Models;
 using UnityEngine.UnityConsent;
+using Unity.Collections;
+
 
 #if UNITY_STANDALONE_WIN
 using System.Runtime.InteropServices;
@@ -27,7 +29,7 @@ using System.Diagnostics;
 
 using Debug = UnityEngine.Debug;
 
-// NEW: Simple static class to control global game state
+// Global game state
 public static class GameState
 {
     public static bool IsGameRunning = false;
@@ -41,13 +43,9 @@ public class NetworkSetup : MonoBehaviour
     [SerializeField] private int                    maxPlayers = 2;
     [SerializeField] private string                 joinCode = "";
     [SerializeField] private bool                   enableAnalytics;
-    
-    // NEW: Optional UI text to show "Waiting for other player..."
-    [SerializeField] private TextMeshProUGUI        waitingText;
-    
+    [SerializeField] private TextMeshProUGUI        waitingText;   // optional, will be hidden when game starts
+
     private HashSet<ulong> spawnedClients = new HashSet<ulong>();
-    
-    // NEW: Flag to prevent starting the game twice
     private bool gameStarted = false;
 
     public class RelayHostData
@@ -95,6 +93,8 @@ public class NetworkSetup : MonoBehaviour
 
     void Start()
     {
+        RegisterCustomMessages();
+
         string[] args = System.Environment.GetCommandLineArgs();
         for (int i = 0; i < args.Length; i++)
         {
@@ -109,7 +109,7 @@ public class NetworkSetup : MonoBehaviour
         }
 
         transport = GetComponent<UnityTransport>();
-        if (transport.Protocol == UnityTransport.ProtocolType.RelayUnityTransport)
+        if (transport != null && transport.Protocol == UnityTransport.ProtocolType.RelayUnityTransport)
         {
             isRelay = true;
         }
@@ -118,6 +118,20 @@ public class NetworkSetup : MonoBehaviour
             StartCoroutine(StartAsServerCR());
         else if (!string.IsNullOrEmpty(joinCode))
             StartCoroutine(StartAsClientCR());
+        else
+            Debug.LogError("No valid launch arguments. Use --server or --code <joinCode>");
+    }
+
+    private void RegisterCustomMessages()
+    {
+        networkManager.CustomMessagingManager.RegisterNamedMessageHandler("GameStarted",
+            (senderClientId, reader) =>
+            {
+                GameState.IsGameRunning = true;
+                if (waitingText != null)
+                    waitingText.gameObject.SetActive(false);
+                Debug.Log("Game started (client received message)");
+            });
     }
 
     public void SetPlayerSpawnData(List<Transform> locations, List<PlayerController> prefabs, TextMeshProUGUI codeDisplayText = null)
@@ -197,7 +211,7 @@ public class NetworkSetup : MonoBehaviour
             }
             else
             {
-                SpawnHostPlayer();
+                // No host player spawned for dedicated server
             }
             return relayData.JoinCode;
         }
@@ -330,6 +344,10 @@ public class NetworkSetup : MonoBehaviour
             Debug.Log($"Serving on port {transport.ConnectionData.Port}");
             networkManager.OnClientConnectedCallback += OnClientConnected;
             networkManager.OnClientDisconnectCallback += OnClientDisconnected;
+
+            // Start a 20-second timer to begin the game
+            StartCoroutine(StartGameAfterDelay(20f));
+            Debug.Log("Server started – game will start in 20 seconds.");
         }
         else
         {
@@ -429,33 +447,37 @@ public class NetworkSetup : MonoBehaviour
         Debug.Log($"Spawned player for client {clientId}, prefab index {playerPrefabIndex}");
         playerPrefabIndex++;
         spawnedClients.Add(clientId);
-
-        // NEW: Check if the required number of players have connected
-        if (!gameStarted && networkManager.ConnectedClients.Count == maxPlayers)
-        {
-            StartGame();
-        }
     }
 
-    // NEW: Method called when all players are ready
     private void StartGame()
     {
         if (gameStarted) return;
         gameStarted = true;
         GameState.IsGameRunning = true;
 
-        // Hide waiting text if assigned
+        if (networkManager.IsServer)
+        {
+            using var writer = new FastBufferWriter(0, Allocator.Temp);
+            networkManager.CustomMessagingManager.SendNamedMessageToAll("GameStarted", writer);
+            Debug.Log("Game start message sent to all clients.");
+        }
+
         if (waitingText != null)
             waitingText.gameObject.SetActive(false);
 
-        Debug.Log("Game started – both players are on the field!");
+        Debug.Log("Game started after 20 seconds!");
     }
 
-    private void SpawnHostPlayer()
+    private IEnumerator StartGameAfterDelay(float delay)
     {
-        if (networkManager == null || !networkManager.IsServer) return;
-        SpawnPlayerForClient(networkManager.LocalClientId);
+        yield return new WaitForSeconds(delay);
+        if (!gameStarted)
+        {
+            StartGame();
+        }
     }
+
+    private void SpawnHostPlayer() { } // dedicated server
 
     private void OnClientConnected(ulong clientId)
     {
@@ -481,15 +503,12 @@ public class NetworkSetup : MonoBehaviour
     {
         if (scene.name == pendingGameSceneName)
         {
-            Debug.Log($"Game scene '{scene.name}' loaded – spawning host player");
-            SpawnHostPlayer();
-
+            Debug.Log($"Game scene '{scene.name}' loaded – spawning any queued players");
             while (pendingClientSpawns.Count > 0)
             {
                 ulong clientId = pendingClientSpawns.Dequeue();
                 SpawnPlayerForClient(clientId);
             }
-
             SceneManager.sceneLoaded -= OnGameSceneLoaded;
             pendingGameSceneName = null;
         }
@@ -650,34 +669,22 @@ public class NetworkSetup : MonoBehaviour
         process.Start();
     }
 
-    [MenuItem("Tools/Build and Launch (Server)", priority = 10)]
-    public static void BuildAndLaunch1()
-    {
-        CloseAll();
-        if (BuildGame()) LaunchServer();
-    }
-    [MenuItem("Tools/Build and Launch (Client)", priority = 15)]
-    public static void BuildAndLaunchClient()
-    {
-        CloseAll();
-        if (BuildGame()) LaunchClient();
-    }
-    [MenuItem("Tools/Build and Launch (Server + Client)", priority = 20)]
-    public static void BuildAndLaunchServerAndClient()
-    {
-        CloseAll();
-        if (BuildGame()) LaunchClientAndServer();
-    }
-    [MenuItem("Tools/Launch (Server) _F11", priority = 30)]
+    [MenuItem("Tools/Launch (Server)", priority = 30)]
     public static void LaunchServer() => Run("Builds\\MPTanks.exe", "--server");
-    [MenuItem("Tools/Launch (Server + Client)", priority = 40)]
-    public static void LaunchClientAndServer()
+
+    [MenuItem("Tools/Launch (Client 1)", priority = 46)]
+    public static void LaunchClient1() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
+
+    [MenuItem("Tools/Launch (Client 2)", priority = 47)]
+    public static void LaunchClient2() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
+
+    [MenuItem("Tools/Launch (2 Clients)", priority = 50)]
+    public static void LaunchTwoClients()
     {
-        LaunchServer();
-        LaunchClient();
+        LaunchClient1();
+        LaunchClient2();
     }
-    [MenuItem("Tools/Launch (Client)", priority = 45)]
-    public static void LaunchClient() => Run("Builds\\MPTanks.exe", "");
+
     [MenuItem("Tools/Close All", priority = 100)]
     public static void CloseAll()
     {

@@ -56,7 +56,6 @@ public class PlayerController : NetworkBehaviour
     void Update()
     {
         if (!IsOwner) return;
-        if (!GameState.IsGameRunning) return;
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;

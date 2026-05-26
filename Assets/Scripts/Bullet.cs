@@ -7,8 +7,8 @@ public class Bullet : NetworkBehaviour
     private int _damage = 20;
     public int Damage => _damage;
     [SerializeField] private PhysicsMaterial2D _bouncyMaterial;
-    private float _lifetime = 3f;
-    private int _maxBounces = 2;
+    private float _lifetime = 25f;
+    private int _maxBounces = 4;
     private int _bounceCount = 0;
     private Rigidbody2D rb;
 

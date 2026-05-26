@@ -798,9 +798,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 863452649}
-  - component: {fileID: 863452648}
   - component: {fileID: 863452647}
   - component: {fileID: 863452646}
+  - component: {fileID: 863452650}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -881,7 +881,22 @@ MonoBehaviour:
     OldPrefabList: []
   RunInBackground: 1
   LogLevel: 1
---- !u!114 &863452648
+--- !u!4 &863452649
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 863452645}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.06456, y: 1.87617, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &863452650
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -899,25 +914,10 @@ MonoBehaviour:
   playerPrefabs:
   - {fileID: 3916159326971212002, guid: 3a87fe46d52780d4db45030befaeddd3, type: 3}
   - {fileID: 3916159326971212002, guid: 469d2d176e1188f4e9c12abee57e1931, type: 3}
-  textJoinCode: {fileID: 0}
+  textJoinCode: {fileID: 488480863}
   maxPlayers: 2
   joinCode: 
   enableAnalytics: 1
---- !u!4 &863452649
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 863452645}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.06456, y: 1.87617, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1029894525
 GameObject:
   m_ObjectHideFlags: 0
@@ -1087,7 +1087,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b7d9d5c8514fd14ca86bf8a3298ca42, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIMainMenu
-  networkSetup: {fileID: 863452648}
+  networkSetup: {fileID: 863452650}
   joinCodeInput: {fileID: 770020809}
   statusText: {fileID: 1029894526}
   hostButton: {fileID: 1492200573}
