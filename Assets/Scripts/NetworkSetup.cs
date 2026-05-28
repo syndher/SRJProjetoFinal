@@ -529,7 +529,7 @@ public class NetworkSetup : MonoBehaviour
     public string GetJoinCode() => relayData?.JoinCode;
 
     // ------------------------------------------------------------------
-    // Windows window title & editor tools (unchanged)
+    // Windows window title
     // ------------------------------------------------------------------
 #if UNITY_STANDALONE_WIN
     [DllImport("user32.dll", SetLastError = true)]
@@ -568,6 +568,56 @@ public class NetworkSetup : MonoBehaviour
 #endif
 
     // ------------------------------------------------------------------
-    // Editor build & launch tools (keep your existing code)
+    // Editor build & launch tools
     // ------------------------------------------------------------------
+#if UNITY_EDITOR
+    [MenuItem("Tools/Build Windows (x64)", priority = 0)]
+    public static bool BuildGame()
+    {
+        BuildPlayerOptions options = new BuildPlayerOptions();
+        options.scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+        options.locationPathName = Path.Combine("Builds", "MPTanks.exe");
+        options.target = BuildTarget.StandaloneWindows64;
+        options.options = BuildOptions.None;
+        var report = BuildPipeline.BuildPlayer(options);
+        Debug.Log($"Build ended with status: {report.summary.result}");
+        return report.summary.result == BuildResult.Succeeded;
+    }
+
+    private static void Run(string path, string args)
+    {
+        Process proc = new Process();
+        proc.StartInfo.FileName = path;
+        proc.StartInfo.Arguments = args;
+        proc.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+        proc.StartInfo.UseShellExecute = true;
+        proc.Start();
+    }
+
+    [MenuItem("Tools/Launch (Server)", priority = 30)]
+    public static void LaunchServer() => Run("Builds\\MPTanks.exe", "--server");
+
+    [MenuItem("Tools/Launch (Client 1)", priority = 46)]
+    public static void LaunchClient1() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
+
+    [MenuItem("Tools/Launch (Client 2)", priority = 47)]
+    public static void LaunchClient2() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
+
+    [MenuItem("Tools/Launch (2 Clients)", priority = 50)]
+    public static void LaunchTwoClients()
+    {
+        LaunchClient1();
+        LaunchClient2();
+    }
+
+    [MenuItem("Tools/Close All", priority = 100)]
+    public static void CloseAll()
+    {
+        foreach (var p in Process.GetProcessesByName("MPTanks"))
+        {
+            try { p.Kill(); p.WaitForExit(); }
+            catch (Exception ex) { Debug.LogWarning($"Error killing process: {ex.Message}"); }
+        }
+    }
+#endif
 }

@@ -18,11 +18,11 @@ Os jogadores, as balas e a própria parede rotativa sao networkBehaviours, de mo
 
 O próprio NetworkSetup regista os jogadores que entram no jogo, passando essa informação para o InGameUI, sendo capaz de sincronizar as barras de vida corretas para cada jogador tal como se alguem perdeu e é necessário mostrar um ecrã de vitória.
 
-Para o jogo começar, ambos jogadores tem de já ter entrado no servidor
+Para o jogo começar, ambos jogadores tem de já ter entrado no servidor.
 
 ### Estado/Uso
 
-O projeto encontra-se pouco responsivo em termos de gameplay mas inteiramente funcional por build sem qualquer erro.
+O projeto encontra-se com alguns bugs em termos de gameplay, porém 100% funcional em termos de network.
 
 Instruções:
 
@@ -31,13 +31,13 @@ Instruções:
 
 Controlos:
 
-- Setas horizontais - Virar
-- Setas verticais - Mover
-- Espaço - Disparar
+- Setas horizontais - Virar.
+- Setas verticais - Mover.
+- Espaço - Disparar.
 
 ### Bibliografia
 
-A pesquisa para a construção deste projeto focou-se maioritariamente nos videos do professor da disciplina tal como a utilização do código de networking providenciado pelo mesmo, modificado para obter a funcionabilidade atual.
+A pesquisa para a construção deste projeto focou-se maioritariamente nos videos do professor da disciplina tal como a utilização do código de networking providenciado pelo mesmo, modificado para obter a funcionabilidade atual : <https://www.youtube.com/@diogoandrade9588>
 
 Unity Documentation : <https://docs.unity3d.com/560/Documentation/ScriptReference/Network.html>
 
