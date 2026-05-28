@@ -1,45 +1,84 @@
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections.Generic;
 
 public class PlayerController : NetworkBehaviour
 {
     [Header("Movement")]
-    private float moveSpeed = 5f;
-    private float turnSpeed = 100f;
+    public float moveSpeed = 5f;
+    public float turnSpeed = 200f;
 
     [Header("Combat")]
-    private float shootCooldown = 0.5f;
-    private int maxHealth = 100;
+    public float shootCooldown = 0.5f;
+    public int maxHealth = 100;
 
     [Header("Shooting")]
-    private GameObject bulletPrefab;
-    private Transform shootPoint;
+    public GameObject bulletPrefab;
+    public Transform shootPoint;
+
+    public NetworkVariable<int> currentHealth = new NetworkVariable<int>(100,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<bool> isAlive = new NetworkVariable<bool>(true,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public static System.Action<ulong, int> OnAnyPlayerHealthChanged;
+    public static System.Action<ulong> OnAnyPlayerDied;
 
     private Rigidbody2D rb;
+    private List<Collider2D> allColliders = new List<Collider2D>();
+    private List<Renderer> allRenderers = new List<Renderer>();
+    
     private float moveInput;
     private float turnInput;
     private float nextShootTime;
-    private int currentHealth;
-    public int CurrentHealth => currentHealth;
+    private bool localIsAlive = true;
+    private GameMatchManager matchManager;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        if (rb == null)
-            rb = gameObject.AddComponent<Rigidbody2D>();
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody2D>();
         rb.gravityScale = 0;
         rb.freezeRotation = true;
+        rb.bodyType = RigidbodyType2D.Dynamic;
 
-        currentHealth = maxHealth;
+        allColliders.Clear();
+        allColliders.AddRange(GetComponentsInChildren<Collider2D>());
+        if (allColliders.Count == 0)
+            allColliders.Add(gameObject.AddComponent<BoxCollider2D>());
+        foreach (var col in allColliders)
+            col.isTrigger = false;
 
-        Collider2D col = GetComponent<Collider2D>();
-        if (col == null)
-            col = gameObject.AddComponent<BoxCollider2D>();
-        col.isTrigger = false;
+        allRenderers.Clear();
+        allRenderers.AddRange(GetComponentsInChildren<Renderer>());
+    }
 
-        if (shootPoint == null)
-            shootPoint = transform;
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        NetworkSetup.AllPlayers.Add(this);
+        matchManager = FindFirstObjectByType<GameMatchManager>();
+
+        if (IsClient)
+        {
+            currentHealth.OnValueChanged += (oldVal, newVal) =>
+            {
+                OnAnyPlayerHealthChanged?.Invoke(OwnerClientId, newVal);
+            };
+            OnAnyPlayerHealthChanged?.Invoke(OwnerClientId, currentHealth.Value);
+
+            isAlive.OnValueChanged += (oldVal, newVal) =>
+            {
+                localIsAlive = newVal;
+                UpdateTankState(newVal);
+            };
+            localIsAlive = isAlive.Value;
+            UpdateTankState(isAlive.Value);
+        }
 
         if (!IsOwner)
         {
@@ -48,21 +87,40 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    private void UpdateTankState(bool alive)
+    {
+        foreach (var rend in allRenderers)
+            rend.enabled = alive;
+        foreach (var col in allColliders)
+            col.enabled = alive;
+        if (rb != null)
+            rb.simulated = alive;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        NetworkSetup.AllPlayers.Remove(this);
+        base.OnNetworkDespawn();
+    }
+
+    private bool IsGameReady()
+    {
+        if (matchManager == null) return false;
+        return matchManager.gameReady.Value;
+    }
+
     void Update()
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !localIsAlive || !IsGameReady()) return;
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // Movement input
         moveInput = keyboard.wKey.isPressed ? 1 : (keyboard.sKey.isPressed ? -1 : 0);
         turnInput = keyboard.aKey.isPressed ? 1 : (keyboard.dKey.isPressed ? -1 : 0);
 
-        // Shooting
         if (keyboard.spaceKey.wasPressedThisFrame && Time.time >= nextShootTime)
         {
-            // Server instantiates bullet
             ShootServerRpc(shootPoint.position, shootPoint.rotation);
             nextShootTime = Time.time + shootCooldown;
         }
@@ -70,7 +128,7 @@ public class PlayerController : NetworkBehaviour
 
     void FixedUpdate()
     {
-        if (!IsOwner) return;
+        if (!IsOwner || !localIsAlive || !IsGameReady()) return;
 
         float turn = turnInput * turnSpeed * Time.fixedDeltaTime;
         rb.MoveRotation(rb.rotation + turn);
@@ -90,8 +148,7 @@ public class PlayerController : NetworkBehaviour
     [ServerRpc]
     void ShootServerRpc(Vector3 position, Quaternion rotation)
     {
-        if (bulletPrefab == null) return;
-
+        if (bulletPrefab == null || !isAlive.Value) return;
         GameObject bullet = Instantiate(bulletPrefab, position, rotation);
         NetworkObject netObj = bullet.GetComponent<NetworkObject>();
         if (netObj != null)
@@ -107,29 +164,49 @@ public class PlayerController : NetworkBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!IsServer) return;
-
+        if (!IsServer || !isAlive.Value) return;
         Bullet bullet = other.GetComponent<Bullet>();
         if (bullet != null)
         {
             TakeDamage(bullet.Damage);
-            bullet.GetComponent<NetworkObject>().Despawn();
+            // The bullet will be despawned by its own collision handler, not here.
         }
     }
 
     public void TakeDamage(int damage)
     {
-        if (!IsServer) return;
-        currentHealth -= damage;
-        Debug.Log($"Player took {damage} damage. Health: {currentHealth}");
-        if (currentHealth <= 0)
+        if (!IsServer || !isAlive.Value) return;
+        currentHealth.Value = Mathf.Max(0, currentHealth.Value - damage);
+        if (currentHealth.Value <= 0)
             Die();
     }
 
     void Die()
     {
+        if (!IsServer || !isAlive.Value) return;
+        isAlive.Value = false;
+        OnAnyPlayerDied?.Invoke(OwnerClientId);
+    }
+
+    public void ServerRespawn(Vector3 position, Quaternion rotation)
+    {
         if (!IsServer) return;
-        GetComponent<NetworkObject>().Despawn();
-        Destroy(gameObject);
+        transform.position = position;
+        transform.rotation = rotation;
+        currentHealth.Value = maxHealth;
+        rb.linearVelocity = Vector2.zero;
+        isAlive.Value = true;
+        RespawnClientRpc(position, rotation);
+    }
+
+    [ClientRpc]
+    private void RespawnClientRpc(Vector3 position, Quaternion rotation)
+    {
+        transform.position = position;
+        transform.rotation = rotation;
+        UpdateTankState(true);
+        localIsAlive = true;
+        if (!IsServer)
+            OnAnyPlayerHealthChanged?.Invoke(OwnerClientId, maxHealth);
     }
 }

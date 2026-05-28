@@ -3,52 +3,68 @@ using Unity.Netcode;
 
 public class Bullet : NetworkBehaviour
 {
-    private float _speed = 10f;
-    private int _damage = 20;
-    public int Damage => _damage;
-    [SerializeField] private PhysicsMaterial2D _bouncyMaterial;
-    private float _lifetime = 25f;
-    private int _maxBounces = 4;
-    private int _bounceCount = 0;
-    private Rigidbody2D rb;
+    [SerializeField] private float speed = 10f;
+    [SerializeField] private int damage = 20;
+    [SerializeField] private int maxBounces = 4;
+    [SerializeField] private float lifetime = 5f;
 
-    void Start()
+    public int Damage => damage;
+
+    private Rigidbody2D rb;
+    private int bounceCount = 0;
+
+    void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         if (rb == null) rb = gameObject.AddComponent<Rigidbody2D>();
-        rb.bodyType = RigidbodyType2D.Dynamic;   // needed for physics bounce
         rb.gravityScale = 0;
         rb.freezeRotation = true;
-        rb.linearVelocity = transform.up * _speed;
+        rb.bodyType = RigidbodyType2D.Dynamic;
 
-        CircleCollider2D circle = GetComponent<CircleCollider2D>();
-        if (circle == null) circle = gameObject.AddComponent<CircleCollider2D>();
-        circle.isTrigger = false;
-        circle.radius = 0.2f;
-        circle.sharedMaterial = _bouncyMaterial; // assign here too
-
-        Destroy(gameObject, _lifetime);
+        // Ensure there's a collider (non‑trigger)
+        var col = GetComponent<Collider2D>();
+        if (col == null) col = gameObject.AddComponent<CircleCollider2D>();
+        col.isTrigger = false;
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    void Start()
     {
+        // Set initial velocity on ALL instances (server + clients)
+        rb.linearVelocity = transform.up * speed;
+
+        // Auto‑destroy after lifetime (server only is safer, but clients can also destroy)
+        if (IsServer)
+            Invoke(nameof(DespawnBullet), lifetime);
+    }
+
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Only server handles damage and despawn logic
         if (!IsServer) return;
 
-        // Hit player
+        // Hit a player
         PlayerController player = collision.gameObject.GetComponent<PlayerController>();
         if (player != null)
         {
-            player.TakeDamage(_damage);
-            GetComponent<NetworkObject>().Despawn();
+            player.TakeDamage(damage);
+            DespawnBullet();
             return;
         }
 
-        // Hit wall
+        // Hit a wall (objects with Walls script)
         if (collision.gameObject.GetComponent<Walls>() != null)
         {
-            _bounceCount++;
-            if (_bounceCount >= _maxBounces)
-                GetComponent<NetworkObject>().Despawn();
+            bounceCount++;
+            if (bounceCount >= maxBounces)
+                DespawnBullet();
         }
+    }
+
+    private void DespawnBullet()
+    {
+        if (NetworkObject != null && NetworkObject.IsSpawned)
+            NetworkObject.Despawn();
+        else
+            Destroy(gameObject);
     }
 }

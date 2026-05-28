@@ -10,17 +10,20 @@ public class UIMainMenu : MonoBehaviour
     [SerializeField] private TextMeshProUGUI statusText;
     [SerializeField] private Button hostButton;
     [SerializeField] private Button joinButton;
+    [SerializeField] private Button quitButton;
     [SerializeField] private string gameSceneName = "Game";
 
     private async void Start()
     {
         hostButton.interactable = false;
         joinButton.interactable = false;
+        quitButton.interactable = false;
 
         await networkSetup.InitializeUnityServices();
 
         hostButton.interactable = true;
         joinButton.interactable = true;
+        quitButton.interactable = true;
     }
 
     public async void OnHostClicked()
@@ -49,5 +52,10 @@ public class UIMainMenu : MonoBehaviour
         statusText.text = "Joining...";
         await networkSetup.StartClientWithRelay(code);
         statusText.text = "Connecting...";
+    }
+
+    public void OnQuitClicked()
+    {
+        Application.Quit();
     }
 }

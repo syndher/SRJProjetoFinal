@@ -188,8 +188,11 @@ MonoBehaviour:
   maxHealth: 100
   bulletPrefab: {fileID: 8581529278563067995, guid: bf0b229b0220ea7459285ee930d2f027, type: 3}
   shootPoint: {fileID: 4909285515873788557}
-  muzzleFlashPrefab: {fileID: 0}
-  shootSound: {fileID: 0}
+  currentHealth:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 100
 --- !u!50 &5090303113309784432
 Rigidbody2D:
   serializedVersion: 5
@@ -247,7 +250,7 @@ BoxCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 1
+  m_IsTrigger: 0
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0

@@ -10,11 +10,15 @@ O projeto consiste num simples jogo dos tanques onde dois jogadores vão um cont
 
 O jogo funciona por Unity Relay.
 
-Foi utilizado o "Unity Netcode for GameObjects" para implementar o jogo de ação, cliente/servidor sem qualquer tipo de login/matchmaking, tal como Unity Relay, Unity Transport (UTP) e Unity Authentication simplesmente para a utilização do Relay e não para login em si
+Foi utilizado o "Unity Netcode for GameObjects" para implementar o jogo de ação, cliente/servidor sem qualquer tipo de login/matchmaking, tal como Unity Relay, Unity Transport (UTP) e Unity Authentication simplesmente para a utilização do Relay e não para login em si.
 
 Ao ler os argumentos passados quando se corre a build, neste caso quando se pressiona Server ou Join, este envia "--server" ou "--client (code)" respetivamente sendo apenas necessário uma build para tanto correr um servidor como juntar-se a um.
 
 Os jogadores, as balas e a própria parede rotativa sao networkBehaviours, de modo a que o servidor instancia as balas disparadas pelos jogadores através do ServerRPC. A parede rotativa contem um componente Network Transform para se manter em sincronia com todos os jogadores através do servidor, tal como as balas tem o componente Network Object.
+
+O próprio NetworkSetup regista os jogadores que entram no jogo, passando essa informação para o InGameUI, sendo capaz de sincronizar as barras de vida corretas para cada jogador tal como se alguem perdeu e é necessário mostrar um ecrã de vitória.
+
+Para o jogo começar, ambos jogadores tem de já ter entrado no servidor
 
 ### Estado/Uso
 
@@ -22,8 +26,8 @@ O projeto encontra-se pouco responsivo em termos de gameplay mas inteiramente fu
 
 Instruções:
 
-- Uma build corre em servidor pela opção Server
-- Jogadores entram nesse server pelo código disponível no canto
+- Uma build corre em servidor pela opção Server.
+- Jogadores entram nesse servidor pelo código disponível no canto do ecrã disponível da sua build.
 
 Controlos:
 

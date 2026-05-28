@@ -36,6 +36,16 @@ public class NetworkSetup : MonoBehaviour
     [SerializeField] private string                 joinCode = "";
     [SerializeField] private bool                   enableAnalytics;
 
+    // ========== Player Registry ==========
+    public static List<PlayerController> AllPlayers = new List<PlayerController>();
+    public static PlayerController GetLocalPlayer()
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsClient) return null;
+        foreach (var p in AllPlayers)
+            if (p != null && p.IsOwner) return p;
+        return null;
+    }
+
     private HashSet<ulong> spawnedClients = new HashSet<ulong>();
     private int playerPrefabIndex = 0;
 
@@ -68,17 +78,6 @@ public class NetworkSetup : MonoBehaviour
         networkManager = GetComponent<NetworkManager>();
         if (transport == null) Debug.LogError("No UnityTransport found!");
         if (networkManager == null) Debug.LogError("No NetworkManager found!");
-
-        if (playerPrefabs != null)
-        {
-            foreach (var prefab in playerPrefabs)
-            {
-                if (prefab != null && prefab.GetComponent<NetworkObject>() != null)
-                {
-                    networkManager.NetworkConfig.Prefabs.Add(new NetworkPrefab { Prefab = prefab.gameObject });
-                }
-            }
-        }
     }
 
     void Start()
@@ -100,8 +99,6 @@ public class NetworkSetup : MonoBehaviour
             StartCoroutine(StartAsServerCR());
         else if (!string.IsNullOrEmpty(joinCode))
             StartCoroutine(StartAsClientCR());
-        //else
-            //Debug.LogError("No valid launch arguments. Use --server or --code <joinCode>");
     }
 
     public void SetPlayerSpawnData(List<Transform> locations, List<PlayerController> prefabs, TextMeshProUGUI codeDisplayText = null)
@@ -109,8 +106,12 @@ public class NetworkSetup : MonoBehaviour
         playerSpawnLocations = locations;
         playerPrefabs = prefabs;
         textJoinCode = codeDisplayText;
+        Debug.Log($"Spawn data updated: {playerSpawnLocations?.Count} locations, {playerPrefabs?.Count} prefabs");
     }
 
+    public List<Transform> GetPlayerSpawnLocations() => playerSpawnLocations;
+
+    // ========== Relay methods ==========
     public async Task InitializeUnityServices()
     {
         if (unityServicesInitialized) return;
@@ -121,7 +122,6 @@ public class NetworkSetup : MonoBehaviour
     public async Task<string> StartHostWithRelay(int maxPlayers, string gameSceneName = null)
     {
         await InitializeUnityServices();
-
         var allocationTask = CreateAllocationAsync(maxPlayers);
         await allocationTask;
         if (allocationTask.Exception != null)
@@ -159,7 +159,6 @@ public class NetworkSetup : MonoBehaviour
 
         transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
             relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData);
-
         InitAnalytics();
 
         if (networkManager == null)
@@ -173,7 +172,6 @@ public class NetworkSetup : MonoBehaviour
             Debug.Log($"Server started on port {transport.ConnectionData.Port}");
             networkManager.OnClientConnectedCallback += OnClientConnected;
             networkManager.OnClientDisconnectCallback += OnClientDisconnected;
-
             if (!string.IsNullOrEmpty(gameSceneName))
             {
                 pendingGameSceneName = gameSceneName;
@@ -192,18 +190,17 @@ public class NetworkSetup : MonoBehaviour
     public async Task StartClientWithRelay(string joinCode)
     {
         await InitializeUnityServices();
-
-        var joinAllocationTask = JoinAllocationAsync(joinCode);
+        Task<JoinAllocation> joinAllocationTask = JoinAllocationAsync(joinCode);
         await joinAllocationTask;
         if (joinAllocationTask.Exception != null)
         {
             Debug.LogError("Join allocation failed: " + joinAllocationTask.Exception);
             return;
         }
-        var allocation = joinAllocationTask.Result;
+        JoinAllocation allocation = joinAllocationTask.Result;
 
         relayData = new RelayHostData();
-        foreach (var endpoint in allocation.ServerEndpoints)
+        foreach (RelayServerEndpoint endpoint in allocation.ServerEndpoints)
         {
             relayData.IPv4Address = endpoint.Host;
             relayData.Port = (ushort)endpoint.Port;
@@ -217,7 +214,6 @@ public class NetworkSetup : MonoBehaviour
         transport.SetRelayServerData(relayData.IPv4Address, relayData.Port,
             relayData.AllocationIDBytes, relayData.Key, relayData.ConnectionData,
             relayData.HostConnectionData);
-
         InitAnalytics();
 
         if (networkManager == null)
@@ -245,7 +241,7 @@ public class NetworkSetup : MonoBehaviour
 
         if (isRelay)
         {
-            var loginTask = Login();
+            Task loginTask = Login();
             yield return new WaitUntil(() => loginTask.IsCompleted);
             if (loginTask.Exception != null)
             {
@@ -254,7 +250,7 @@ public class NetworkSetup : MonoBehaviour
             }
             Debug.Log("Login successful!");
 
-            var allocationTask = CreateAllocationAsync(maxPlayers);
+            Task<Allocation> allocationTask = CreateAllocationAsync(maxPlayers);
             yield return new WaitUntil(() => allocationTask.IsCompleted);
             if (allocationTask.Exception != null)
             {
@@ -267,7 +263,7 @@ public class NetworkSetup : MonoBehaviour
                 Allocation allocation = allocationTask.Result;
 
                 relayData = new RelayHostData();
-                foreach (var endpoint in allocation.ServerEndpoints)
+                foreach (RelayServerEndpoint endpoint in allocation.ServerEndpoints)
                 {
                     relayData.IPv4Address = endpoint.Host;
                     relayData.Port = (ushort)endpoint.Port;
@@ -278,7 +274,7 @@ public class NetworkSetup : MonoBehaviour
                 relayData.ConnectionData = allocation.ConnectionData;
                 relayData.Key = allocation.Key;
 
-                var joinCodeTask = GetJoinCodeAsync(relayData.AllocationID);
+                Task<string> joinCodeTask = GetJoinCodeAsync(relayData.AllocationID);
                 yield return new WaitUntil(() => joinCodeTask.IsCompleted);
                 if (joinCodeTask.Exception != null)
                 {
@@ -357,6 +353,7 @@ public class NetworkSetup : MonoBehaviour
         }
     }
 
+    // ========== Spawning ==========
     private void SpawnPlayerForClient(ulong clientId)
     {
         if (spawnedClients.Contains(clientId))
@@ -376,13 +373,14 @@ public class NetworkSetup : MonoBehaviour
         }
 
         Vector3 spawnPos = playerSpawnLocations[0].position;
-        var currentPlayers = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
-        foreach (var spawnLoc in playerSpawnLocations)
+        List<PlayerController> currentPlayers = AllPlayers;
+
+        foreach (Transform spawnLoc in playerSpawnLocations)
         {
             bool occupied = false;
-            foreach (var player in currentPlayers)
+            foreach (PlayerController player in currentPlayers)
             {
-                if (Vector3.Distance(player.transform.position, spawnLoc.position) < 2f)
+                if (player != null && Vector3.Distance(player.transform.position, spawnLoc.position) < 2f)
                 {
                     occupied = true;
                     break;
@@ -395,9 +393,9 @@ public class NetworkSetup : MonoBehaviour
             }
         }
 
-        var playerPrefab = playerPrefabs[playerPrefabIndex % playerPrefabs.Count];
-        var playerObj = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
-        var netObj = playerObj.GetComponent<NetworkObject>();
+        PlayerController playerPrefab = playerPrefabs[playerPrefabIndex % playerPrefabs.Count];
+        PlayerController playerObj = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+        NetworkObject netObj = playerObj.GetComponent<NetworkObject>();
         netObj.SpawnAsPlayerObject(clientId, true);
 
         Debug.Log($"Spawned player for client {clientId}, prefab index {playerPrefabIndex}");
@@ -405,10 +403,10 @@ public class NetworkSetup : MonoBehaviour
         spawnedClients.Add(clientId);
     }
 
+    // ========== Network Events ==========
     private void OnClientConnected(ulong clientId)
     {
         if (!networkManager.IsServer) return;
-
         if (pendingGameSceneName != null && SceneManager.GetActiveScene().name != pendingGameSceneName)
         {
             pendingClientSpawns.Enqueue(clientId);
@@ -423,13 +421,18 @@ public class NetworkSetup : MonoBehaviour
     private void OnClientDisconnected(ulong clientId)
     {
         Debug.Log($"Client {clientId} disconnected");
+        for (int i = AllPlayers.Count - 1; i >= 0; i--)
+        {
+            if (AllPlayers[i] != null && AllPlayers[i].OwnerClientId == clientId)
+                AllPlayers.RemoveAt(i);
+        }
     }
 
     private void OnGameSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (scene.name == pendingGameSceneName)
         {
-            Debug.Log($"Game scene '{scene.name}' loaded – spawning any queued players");
+            Debug.Log($"Game scene '{scene.name}' loaded – spawning queued players");
             while (pendingClientSpawns.Count > 0)
             {
                 ulong clientId = pendingClientSpawns.Dequeue();
@@ -526,7 +529,7 @@ public class NetworkSetup : MonoBehaviour
     public string GetJoinCode() => relayData?.JoinCode;
 
     // ------------------------------------------------------------------
-    // Windows window title
+    // Windows window title & editor tools (unchanged)
     // ------------------------------------------------------------------
 #if UNITY_STANDALONE_WIN
     [DllImport("user32.dll", SetLastError = true)]
@@ -565,56 +568,6 @@ public class NetworkSetup : MonoBehaviour
 #endif
 
     // ------------------------------------------------------------------
-    // Editor build & launch tools
+    // Editor build & launch tools (keep your existing code)
     // ------------------------------------------------------------------
-#if UNITY_EDITOR
-    [MenuItem("Tools/Build Windows (x64)", priority = 0)]
-    public static bool BuildGame()
-    {
-        BuildPlayerOptions options = new BuildPlayerOptions();
-        options.scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
-        options.locationPathName = Path.Combine("Builds", "MPTanks.exe");
-        options.target = BuildTarget.StandaloneWindows64;
-        options.options = BuildOptions.None;
-        var report = BuildPipeline.BuildPlayer(options);
-        Debug.Log($"Build ended with status: {report.summary.result}");
-        return report.summary.result == BuildResult.Succeeded;
-    }
-
-    private static void Run(string path, string args)
-    {
-        Process proc = new Process();
-        proc.StartInfo.FileName = path;
-        proc.StartInfo.Arguments = args;
-        proc.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-        proc.StartInfo.UseShellExecute = true;
-        proc.Start();
-    }
-
-    [MenuItem("Tools/Launch (Server)", priority = 30)]
-    public static void LaunchServer() => Run("Builds\\MPTanks.exe", "--server");
-
-    [MenuItem("Tools/Launch (Client 1)", priority = 46)]
-    public static void LaunchClient1() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
-
-    [MenuItem("Tools/Launch (Client 2)", priority = 47)]
-    public static void LaunchClient2() => Run("Builds\\MPTanks.exe", "--code YOURCODE");
-
-    [MenuItem("Tools/Launch (2 Clients)", priority = 50)]
-    public static void LaunchTwoClients()
-    {
-        LaunchClient1();
-        LaunchClient2();
-    }
-
-    [MenuItem("Tools/Close All", priority = 100)]
-    public static void CloseAll()
-    {
-        foreach (var p in Process.GetProcessesByName("MPTanks"))
-        {
-            try { p.Kill(); p.WaitForExit(); }
-            catch (Exception ex) { Debug.LogWarning($"Error killing process: {ex.Message}"); }
-        }
-    }
-#endif
 }
