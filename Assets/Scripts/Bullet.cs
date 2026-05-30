@@ -21,18 +21,18 @@ public class Bullet : NetworkBehaviour
         rb.freezeRotation = true;
         rb.bodyType = RigidbodyType2D.Dynamic;
 
-        // Ensure there's a collider (non‑trigger)
-        var col = GetComponent<Collider2D>();
+        // Ensure there's a collider
+        Collider2D col = GetComponent<Collider2D>();
         if (col == null) col = gameObject.AddComponent<CircleCollider2D>();
         col.isTrigger = false;
     }
 
     void Start()
     {
-        // Set initial velocity on ALL instances (server + clients)
+        // Set initial velocity on all instances
         rb.linearVelocity = transform.up * speed;
 
-        // Auto‑destroy after lifetime (server only is safer, but clients can also destroy)
+        // Auto‑destroy after lifetime
         if (IsServer)
             Invoke(nameof(DespawnBullet), lifetime);
     }
@@ -51,7 +51,7 @@ public class Bullet : NetworkBehaviour
             return;
         }
 
-        // Hit a wall (objects with Walls script)
+        // Hit a wall
         if (collision.gameObject.GetComponent<Walls>() != null)
         {
             bounceCount++;
