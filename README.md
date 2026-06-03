@@ -70,65 +70,63 @@ Tráfego estimado por cliente em jogo ativo:
 
 ### Diagrama de Redes
 ```mermaid
-classDiagram
-    class NetworkSetup {
-        +StartHostWithRelay()
-        +StartClientWithRelay()
-        +SetPlayerSpawnData()
-        +GetPlayerSpawnLocations()
-        +GetJoinCode()
-        +SpawnPlayerForClient()
-        +OnClientConnected()
-    }
+graph TD
+    subgraph Cloud [Unity Gaming Services]
+        Relay[Relay Service]
+        Auth[Authentication]
+    end
 
-    class GameMatchManager {
-        +gameReady
-        +OnNetworkSpawn()
-        +OnNetworkDespawn()
-        +OnRoundEnd()
-        +SyncMatchWinsClientRpc()
-        +ShowVictoryScreenClientRpc()
-        +RespawnAllPlayers()
-        +GetWinsForClient()
-    }
+    subgraph Server [Servidor / Host]
+        NS_Server[NetworkSetup]
+        GMM_Server[GameMatchManager]
+        Players_Server[PlayerController - Server]
+    end
 
-    class PlayerController {
-        +currentHealth
-        +isAlive
-        +OnNetworkSpawn()
-        +OnNetworkDespawn()
-        +ShootServerRpc()
-        +TakeDamage()
-        +ServerRespawn()
-        +RespawnClientRpc()
-    }
+    subgraph Client1 [Cliente 1]
+        NS_C1[NetworkSetup]
+        UI_C1[InGameUI]
+        Player1[PlayerController - Client]
+    end
 
-    class Bullet {
-        +Damage
-        +OnCollisionEnter2D()
-    }
+    subgraph Client2 [Cliente 2]
+        NS_C2[NetworkSetup]
+        UI_C2[InGameUI]
+        Player2[PlayerController - Client]
+    end
 
-    class InGameUI {
-        +ShowVictoryScreen()
-    }
+    NS_Server -->|StartHostWithRelay| Relay
+    NS_C1 -->|StartClientWithRelay| Relay
+    NS_C2 -->|StartClientWithRelay| Relay
+    Relay <-.->|UDP Game Data| NS_C1
+    Relay <-.->|UDP Game Data| NS_C2
 
-    class NetworkManager {
-        +StartServer()
-        +StartClient()
-    }
+    NS_Server -.->|Anonymous Login| Auth
+    NS_C1 -.->|Anonymous Login| Auth
+    NS_C2 -.->|Anonymous Login| Auth
 
-    class UnityTransport {
-        +SetRelayServerData()
-    }
+    NS_Server -->|Creates| GMM_Server
+    NS_Server -->|Manages AllPlayers| Players_Server
 
-    NetworkSetup --> NetworkManager : uses
-    NetworkSetup --> UnityTransport : configures
-    NetworkSetup --> PlayerController : spawns
-    GameMatchManager --> PlayerController : subscribes to OnAnyPlayerDied
-    GameMatchManager --> InGameUI : calls ClientRpc
-    PlayerController --> Bullet : instantiates on shoot
-    PlayerController --> GameMatchManager : reads gameReady
-    Bullet --> PlayerController : calls TakeDamage()
+    GMM_Server -->|SyncMatchWinsClientRpc| UI_C1
+    GMM_Server -->|SyncMatchWinsClientRpc| UI_C2
+    GMM_Server -->|ShowVictoryScreenClientRpc| UI_C1
+    GMM_Server -->|ShowVictoryScreenClientRpc| UI_C2
+
+    Players_Server -->|NetworkVariable health, isAlive| Player1
+    Players_Server -->|NetworkVariable health, isAlive| Player2
+    Players_Server -->|RespawnClientRpc| Player1
+    Players_Server -->|RespawnClientRpc| Player2
+
+    Player1 -->|ShootServerRpc| Players_Server
+    Player2 -->|ShootServerRpc| Players_Server
+
+    classDef cloud fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef server fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    classDef client fill:#fff3e0,stroke:#e65100,stroke-width:2px
+
+    class Relay,Auth cloud
+    class NS_Server,GMM_Server,Players_Server server
+    class NS_C1,UI_C1,Player1,NS_C2,UI_C2,Player2 client
 ```
 
 ### Bibliografia
