@@ -25,7 +25,7 @@ Controlos:
 
 O jogo funciona sobre Unity Relay, utilizando o Unity Netcode for GameObjects para a lógica cliente/servidor, sem qualquer sistema de login ou matchmaking – apenas a Unity Authentication é usada para aceder ao Relay, não para autenticação de jogadores.
 
-Ao executar a build, os argumentos da linha de comandos determinam o papel: --server para iniciar um servidor, ou --code <joinCode> para um cliente se juntar a esse servidor. Uma única build serve tanto para correr o servidor como para jogar.
+Ao executar a build, os argumentos da linha de comandos determinam o papel: --server para iniciar um servidor, ou --code <joinCode> para um cliente se juntar a esse servidor. Uma única build serve tanto para correr o servidor como para jogar pois estes argumentos são executados dependendo do botão pressionado no menu principal, sendo "Server" para iniciar o servidor e "Join" com o código escolhido para o cliente se juntar.
 
 Os tanques (PlayerController), as balas e a parede rotativa são NetworkBehaviours. O servidor instancia as balas disparadas pelos jogadores através de ServerRpc, e a parede usa um NetworkTransform para manter a sua rotação sincronizada entre todos os clientes. As balas também têm um NetworkObject para serem visíveis em toda a rede.
 
