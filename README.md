@@ -10,10 +10,10 @@ O projeto consiste num simples jogo dos tanques onde dois jogadores vão um cont
 
 O projeto encontra-se com alguns bugs em termos de gameplay, porém 100% funcional em termos de network.
 
-Instruções:
+Instruções (por LAN):
 
-- Uma build corre em servidor pela opção Server.
-- Jogadores entram nesse servidor pelo código disponível no canto do ecrã disponível da sua build.
+- Uma build corre em servidor pela opção Server e copia-se o código presente no canto superior esquerdo do ecrã.
+- Jogadores entram nesse servidor pelo código copiado.
 
 Controlos:
 
